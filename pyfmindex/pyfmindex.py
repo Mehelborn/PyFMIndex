@@ -1,15 +1,5 @@
-#!/usr/bin/env python
-
 from ctypes import POINTER, byref
-from src._pyfmindex import (
-    _Index,
-    _IndexConfiguration,
-    _create_index,
-    _create_index_from_fasta,
-    _dealloc_index,
-    _read_index_from_file,
-    _write_index_to_file,
-)
+from pyfmindex import _pyfmindex as _pfd
 
 
 class IndexConfiguration:
@@ -21,7 +11,7 @@ class IndexConfiguration:
         keep_suffix_array_in_memory: bool,
         store_original_sequence: bool,
     ) -> None:
-        self._config = _IndexConfiguration(
+        self._config = _pfd._IndexConfiguration(
             suffix_array_compression_ratio,
             kmer_length_in_seed_table,
             alphabet_type,
@@ -63,37 +53,40 @@ class Index:
         self.config = config  # TODO: check if fully initialized
         self.file_path = file_path  # TODO: check if file_path exists
 
-        index = _Index()
+        index = _pfd._Index()
         if not fasta_path:
             self.sequence = sequence
             self.sequence_length = len(sequence)  # NOTE: check if empty?
-            _create_index(
+            return_code: int = _pfd._create_index(
                 byref(POINTER(index)()),
                 byref(config),
                 sequence.encode(),
                 self.sequence_length,
                 file_path.encode(),
             )
+            # TODO: check return code
+
         else:
             # TODO: check if fasta path exists
-            _create_index_from_fasta(
+            return_code: int = _pfd._create_index_from_fasta(
                 byref(POINTER(index)()),
                 byref(config),
                 fasta_path.encode(),
                 file_path.encode(),
             )
+            # TODO: check return code
         self._index = index
 
     def write_to_file(self, file_path: str):
         # TODO: check if have a sequence
         # TODO: check if file_path exists
-        result = _write_index_to_file(
+        result = _pfd._write_index_to_file(
             byref(self._index),
             self.sequence.encode(),
             self.sequence_length,
             file_path.encode(),
         )
-        # TODO: check result code
+        # TODO: check return code
 
     @property
     def version_number(self):
@@ -149,17 +142,18 @@ class Index:
 
     def __del__(self):
         if self._index is not None:
-            _dealloc_index(byref(self._index))
+            _pfd._dealloc_index(byref(self._index))
 
 
 def read_index_from_file(
     file_path: str, keep_suffix_array_in_memory: bool = True
 ) -> Index:
     # TODO: check if path exists
-    index = _Index()
-    _index = _read_index_from_file(
+    index = _pfd._Index()  # TODO: convert to python Index
+    return_code: int = _pfd._read_index_from_file(
         byref(POINTER(index)()),
         file_path.encode(),
         keep_suffix_array_in_memory,
     )
-    return index  # TODO: convert to python Index
+    # TODO: check return code
+    return index

@@ -1,7 +1,8 @@
-git clone https://github.com/mehelborn/PyFMIndex.git
-git submodule update --init --recursive --remote
+**Linux**
 
+To use the wrapper do:
 
-cd lib/AvxWindowFmIndex/
-cmake .
-make
+```sh
+chmod +x ./install.bash
+./install.bash
+```
