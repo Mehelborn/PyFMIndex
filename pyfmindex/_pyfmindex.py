@@ -125,7 +125,7 @@ class _Index(Structure):
 
 class KmerSearchData(Structure):
     _fields_ = [
-        ("kmer_string", POINTER(c_char)),
+        ("kmer_string", POINTER(c_char_p)),
         ("kmer_length", c_uint64),
         ("position_list", POINTER(c_uint64)),
         ("count", c_uint32),
@@ -153,7 +153,7 @@ _create_index.argtypes = [
     POINTER(_IndexConfiguration),
     POINTER(c_uint8),
     c_size_t,
-    POINTER(c_char),
+    c_char_p,
 ]
 
 
@@ -161,8 +161,8 @@ _create_index_from_fasta = lib.awFmCreateIndexFromFasta
 _create_index_from_fasta.argtypes = [
     POINTER(POINTER(_Index)),
     POINTER(_IndexConfiguration),
-    POINTER(c_char),
-    POINTER(c_char),
+    c_char_p,
+    c_char_p,
 ]
 
 _dealloc_index = lib.awFmDeallocIndex
@@ -174,7 +174,7 @@ _write_index_to_file.argtypes = [
     POINTER(_Index),
     POINTER(c_uint8),
     c_uint64,
-    POINTER(c_char),
+    c_char_p,
 ]
 
 _read_index_from_file = lib.awFmReadIndexFromFile
@@ -188,7 +188,7 @@ _read_index_from_file.argtypes = [
 find_search_range_for_string = lib.awFmFindSearchRangeForString
 find_search_range_for_string.argtypes = [
     POINTER(POINTER(_Index)),
-    POINTER(c_char),
+    c_char_p,
     c_size_t,
 ]
 find_search_range_for_string.restype = SearchRange
@@ -221,13 +221,13 @@ read_sequence_from_file.argtypes = [
     POINTER(_Index),
     c_size_t,
     c_size_t,
-    POINTER(c_char),
+    POINTER(c_char_p),
 ]
 
 create_initial_query_range = lib.awFmCreateInitialQueryRange
 create_initial_query_range.argtypes = [
     POINTER(_Index),
-    POINTER(c_char),
+    POINTER(c_char_p),
     c_uint64,
 ]
 create_initial_query_range.restype = SearchRange
@@ -235,7 +235,7 @@ create_initial_query_range.restype = SearchRange
 create_initial_query_range_from_char = lib.awFmCreateInitialQueryRangeFromChar
 create_initial_query_range_from_char.argtypes = [
     POINTER(_Index),
-    c_char,
+    c_char_p,
 ]
 create_initial_query_range_from_char.restype = SearchRange
 
@@ -305,7 +305,7 @@ get_header_string_from_sequence_number = lib.awFmGetHeaderStringFromSequenceNumb
 get_header_string_from_sequence_number.argtypes = [
     POINTER(_Index),
     c_size_t,
-    POINTER(POINTER(c_char)),
+    POINTER(POINTER(c_char_p)),
     POINTER(c_size_t),
 ]
 

@@ -1,4 +1,4 @@
-from ctypes import POINTER, byref
+from ctypes import POINTER, byref, c_ubyte, c_char
 from pyfmindex import _pyfmindex as _pfd
 
 
@@ -50,29 +50,34 @@ class Index:
         sequence: str = None,
         fasta_path: str = None,
     ) -> None:
-        self.config = config  # TODO: check if fully initialized
-        self.file_path = file_path  # TODO: check if file_path exists
+        # TODO: check if fully initialized
+        file_path_bytes = file_path.encode('utf-8')  # TODO: check if file_path exists
 
         index = _pfd._Index()
+        index_ptr = POINTER(_pfd._Index)(index)
+
         if not fasta_path:
-            self.sequence = sequence
-            self.sequence_length = len(sequence)  # NOTE: check if empty?
+            sequence_bytes = sequence.encode('utf-8')
+            sequence_bytes_length = len(sequence_bytes)
+            buffer = bytes(range(sequence_bytes_length))
+            seq_filled_buffer = (c_ubyte * sequence_bytes_length).from_buffer(bytearray(buffer))
+
             return_code: int = _pfd._create_index(
-                byref(POINTER(index)()),
-                byref(config),
-                sequence.encode(),
-                self.sequence_length,
-                file_path.encode(),
+                byref(index_ptr),
+                byref(config._config),
+                seq_filled_buffer,
+                len(seq_filled_buffer),
+                file_path_bytes,
             )
             # TODO: check return code
 
         else:
             # TODO: check if fasta path exists
             return_code: int = _pfd._create_index_from_fasta(
-                byref(POINTER(index)()),
-                byref(config),
+                byref(index_ptr),
+                byref(config._config),
                 fasta_path.encode(),
-                file_path.encode(),
+                file_path_bytes,
             )
             # TODO: check return code
         self._index = index
