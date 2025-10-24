@@ -8,5 +8,6 @@ dependencies = []
 
 [dependency-groups]
 dev = [
+    "debugpy>=1.8.17",
     "pytest>=8.4.2",
 ]

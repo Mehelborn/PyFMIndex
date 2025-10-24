@@ -3,6 +3,16 @@
 import os
 from ctypes import *
 
+AMINO_VECTORS_PER_WINDOW = 5
+NUCLEOTIDE_VECTORS_PER_WINDOW = 3
+NUCLEOTIDE_CARDINALITY = 4
+AMINO_CARDINALITY = 20
+
+ALPHABET_TYPE_AMINO = 1
+ALPHABET_TYPE_DNA = 2
+ALPHABET_TYPE_RNA = 3
+
+
 so_path = os.path.abspath("lib/AvxWindowFmIndex/build/libawfmindex.so")
 lib = cdll.LoadLibrary(so_path)
 
@@ -18,30 +28,26 @@ class ReturnCode(c_int):
     OutOfMemory = -5
 
 
-class AlphabetType(c_int):
-    Amino = 1
-    DNA = 2
-    RNA = 3
-
-
-class SimdVec256(Structure):
-    _fields_ = [
-        ("low_vec", c_uint16),
-        ("high_vec", c_uint16),
-    ]
+SimdVec256 = c_uint8 * 32
 
 
 class AminoBlock(Structure):
     _fields_ = [
-        ("letter_bit_vectors", POINTER(SimdVec256)),
-        ("base_occurrences", c_uint64),
+        ("letter_bit_vectors", SimdVec256 * AMINO_VECTORS_PER_WINDOW),
+        (
+            "base_occurrences",
+            c_uint64 * (AMINO_CARDINALITY + 4),
+        ),  # +4 is for sentinel count and 32B padding
     ]
 
 
 class NucleotideBlock(Structure):
     _fields_ = [
-        ("letter_bit_vectors", POINTER(SimdVec256)),
-        ("base_occurrences", c_uint64),
+        ("letter_bit_vectors", SimdVec256 * NUCLEOTIDE_VECTORS_PER_WINDOW),
+        (
+            "base_occurrences",
+            c_uint64 * (NUCLEOTIDE_CARDINALITY + 4),
+        ),  # +4 is for sentinel count and 32B padding
     ]
 
 
@@ -56,7 +62,7 @@ class _IndexConfiguration(Structure):
     _fields_ = [
         ("suffix_array_compression_ratio", c_uint8),
         ("kmer_length_in_seed_table", c_uint8),
-        ("alphabet_type", c_uint8),
+        ("alphabet_type", c_int),
         ("keep_suffix_array_in_memory", c_bool),
         ("store_original_sequence", c_bool),
     ]
@@ -76,24 +82,24 @@ class SearchRange(Structure):
 
 class FastaVectorMetadata(Structure):
     _fields_ = [
-        ("headerEndPosition", c_uint32),
-        ("sequenceEndPosition", c_uint32),
+        ("headerEndPosition", c_size_t),
+        ("sequenceEndPosition", c_size_t),
     ]
 
 
 class FastaVectorMetadataVector(Structure):
     _fields_ = [
         ("data", POINTER(FastaVectorMetadata)),
-        ("capacity", c_uint32),
-        ("count", c_uint32),
+        ("capacity", c_size_t),
+        ("count", c_size_t),
     ]
 
 
 class FastaVectorString(Structure):
     _fields_ = [
         ("char_data", c_char_p),
-        ("capacity", c_uint32),
-        ("count", c_uint32),
+        ("capacity", c_size_t),
+        ("count", c_size_t),
     ]
 
 
@@ -125,7 +131,7 @@ class _Index(Structure):
 
 class KmerSearchData(Structure):
     _fields_ = [
-        ("kmer_string", POINTER(c_char_p)),
+        ("kmer_string", c_char_p),
         ("kmer_length", c_uint64),
         ("position_list", POINTER(c_uint64)),
         ("count", c_uint32),
@@ -139,12 +145,6 @@ class KmerSearchList(Structure):
         ("count", c_size_t),
         ("kmer_search_data", POINTER(KmerSearchData)),
     ]
-
-
-def _is_pointer_to_pointer(obj):
-    if isinstance(obj, _Pointer):
-        return isinstance(obj._type_, type) and issubclass(obj._type_, _Pointer)
-    return False
 
 
 _create_index = lib.awFmCreateIndex
@@ -165,9 +165,11 @@ _create_index_from_fasta.argtypes = [
     c_char_p,
 ]
 
+
 _dealloc_index = lib.awFmDeallocIndex
 _dealloc_index.argtypes = [POINTER(_Index)]
 _dealloc_index.restype = None
+
 
 _write_index_to_file = lib.awFmWriteIndexToFile
 _write_index_to_file.argtypes = [
@@ -176,6 +178,7 @@ _write_index_to_file.argtypes = [
     c_uint64,
     c_char_p,
 ]
+
 
 _read_index_from_file = lib.awFmReadIndexFromFile
 _read_index_from_file.argtypes = [
@@ -193,13 +196,16 @@ find_search_range_for_string.argtypes = [
 ]
 find_search_range_for_string.restype = SearchRange
 
+
 create_kmer_search_list = lib.awFmCreateKmerSearchList
 create_kmer_search_list.argtypes = [c_size_t]
 create_kmer_search_list.restype = KmerSearchList
 
+
 dealloc_kmer_search_list = lib.awFmDeallocKmerSearchList
 dealloc_kmer_search_list.argtypes = [POINTER(KmerSearchList)]
 dealloc_kmer_search_list.restype = None
+
 
 parallel_search_locate = lib.awFmParallelSearchLocate
 parallel_search_locate.argtypes = [
@@ -207,6 +213,7 @@ parallel_search_locate.argtypes = [
     POINTER(KmerSearchList),
     c_uint32,
 ]
+
 
 parallel_search_count = lib.awFmParallelSearchCount
 parallel_search_count.argtypes = [
@@ -224,6 +231,7 @@ read_sequence_from_file.argtypes = [
     POINTER(c_char_p),
 ]
 
+
 create_initial_query_range = lib.awFmCreateInitialQueryRange
 create_initial_query_range.argtypes = [
     POINTER(_Index),
@@ -231,6 +239,7 @@ create_initial_query_range.argtypes = [
     c_uint64,
 ]
 create_initial_query_range.restype = SearchRange
+
 
 create_initial_query_range_from_char = lib.awFmCreateInitialQueryRangeFromChar
 create_initial_query_range_from_char.argtypes = [
@@ -250,6 +259,7 @@ nucleotide_iterative_step_backward_search.argtypes = [
 ]
 nucleotide_iterative_step_backward_search.restype = None
 
+
 amino_iterative_step_backward_search = lib.awFmAminoIterativeStepBackwardSearch
 amino_iterative_step_backward_search.argtypes = [
     POINTER(_Index),
@@ -265,6 +275,7 @@ find_database_hit_positions.argtypes = [
     POINTER(SearchRange),
     POINTER(c_int),
 ]
+
 
 find_database_hit_position_single = lib.awFmFindDatabaseHitPositionSingle
 find_database_hit_position_single.argtypes = [
@@ -285,6 +296,7 @@ get_local_sequence_position_from_index_position.argtypes = [
     POINTER(c_size_t),
 ]
 
+
 nucleotide_backtrace_return_previous_letter_index = (
     lib.awFmNucleotideBacktraceReturnPreviousLetterIndex
 )
@@ -301,6 +313,7 @@ amino_backtrace_return_previous_letter_index.argtypes = [
     POINTER(c_uint64),
 ]
 
+
 get_header_string_from_sequence_number = lib.awFmGetHeaderStringFromSequenceNumber
 get_header_string_from_sequence_number.argtypes = [
     POINTER(_Index),
@@ -309,13 +322,16 @@ get_header_string_from_sequence_number.argtypes = [
     POINTER(c_size_t),
 ]
 
+
 search_range_length = lib.awFmSearchRangeLength
 search_range_length.argtypes = [POINTER(SearchRange)]
 search_range_length.restype = c_size_t
 
+
 return_code_is_failure = lib.awFmReturnCodeIsFailure
 return_code_is_failure.argtypes = [c_int]
 return_code_is_failure.restype = c_bool
+
 
 return_code_is_success = lib.awFmReturnCodeIsSuccess
 return_code_is_success.argtypes = [c_int]
