@@ -204,12 +204,13 @@ _parallel_search_locate.argtypes = [
 ]
 
 
-parallel_search_count = lib.awFmParallelSearchCount
-parallel_search_count.argtypes = [
+_parallel_search_count = lib.awFmParallelSearchCount
+_parallel_search_count.argtypes = [
     POINTER(_Index),
     POINTER(_KmerSearchList),
     c_uint32,
 ]
+_parallel_search_count.restype = None
 
 
 _read_sequence_from_file = lib.awFmReadSequenceFromFile

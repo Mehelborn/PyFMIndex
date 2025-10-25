@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from enum import IntEnum
 import logging
+import os
 
 import ctypes
 from pyfmindex import _pyfmindex as _pfmi
 
 logger = logging.getLogger(__name__)
-
 
 class ReturnCode(IntEnum):
     Success = 1
@@ -27,7 +27,6 @@ class ReturnCode(IntEnum):
     ErrorDbSequenceNull = -13
     ErrorSuffixArrayNull = -14
     FileAlreadyExists = -15
-
 
 class IndexConfiguration:
     def __init__(
@@ -115,13 +114,15 @@ class Index:
         if not all(( config.alphabet_type, config.keep_suffix_array_in_memory,
                 config.kmer_length_in_seed_table, config.store_original_sequence,
                 config.suffix_array_compression_ratio)):  # fmt: skip
-            raise Exception("Index configuration is not fully initialized")
+            raise Exception("Index configuration is not fully initialized.")
 
-        # TODO: check if file_path exists
-        file_path_bytes = file_path.encode()
+        if os.path.exists(file_path):
+            file_path_bytes = file_path.encode()
+        else:
+            raise FileNotFoundError(f"{file_path} not found.")
 
         index_ptr = ctypes.POINTER(_pfmi._Index)()
-        if not fasta_path:
+        if sequence and not fasta_path:
             sequence_bytes = sequence.encode()
             sequence_bytes_length = len(sequence_bytes)
             sequence_array = (ctypes.c_uint8 * sequence_bytes_length).from_buffer_copy(
@@ -135,17 +136,26 @@ class Index:
                 len(sequence_bytes),
                 file_path_bytes,
             )
-            # TODO: check return code
+            if return_code != ReturnCode.FileWriteOkay:
+                raise Exception(f"Failed to create index: {ReturnCode(return_code).name}.")
 
-        else:
-            # TODO: check if fasta path exists
+        elif fasta_path:
+            if os.path.exists(fasta_path):
+                fasta_path_bytes = fasta_path.encode()
+            else:
+                raise FileNotFoundError(f"{fasta_path}")
+
             return_code: int = _pfmi._create_index_from_fasta(
                 ctypes.byref(index_ptr),
                 ctypes.byref(config._config),
-                fasta_path.encode(),
+                fasta_path_bytes,
                 file_path_bytes,
             )
-            # TODO: check return code
+            if return_code != ReturnCode.FileWriteOkay:
+                raise Exception(f"Failed to create index from fasta: {ReturnCode(return_code).name}.")
+        else:
+            raise Exception("No data for index building.")
+
         self._index = index_ptr
 
     def find_search_range_for_string(self, kmer: str) -> SearchRange | None:
@@ -183,17 +193,6 @@ class Index:
                 f"ERROR: {ReturnCode.UnsupportedVersionError.name}. The index was configured to not store the original sequence."
             )
         return buffer.value.decode()
-
-    def write_to_file(self, file_path: str):
-        # TODO: check if have a sequence
-        # TODO: check if file_path exists
-        result = _pfmi._write_index_to_file(
-            ctypes.byref(self._index),
-            self.sequence.encode(),
-            self.sequence_length,
-            file_path.encode(),
-        )
-        # TODO: check return code
 
     @property
     def version_number(self):
@@ -253,14 +252,19 @@ class Index:
 
 
 def read_index_from_file(file_path: str, keep_suffix_array_in_memory: bool = False):
-    # TODO: check if path exists
-    index_ptr = ctypes.POINTER(_pfmi._Index)()
+    if os.path.exists(file_path):
+        file_path_bytes = file_path.encode()
+    else:
+        raise FileNotFoundError(f"{file_path} not found.")
+    index_ptr = POINTER(_pfmi._Index)()
+
     return_code: int = _pfmi._read_index_from_file(
-        ctypes.byref(index_ptr),
-        file_path.encode(),
+        byref(index_ptr),
+        file_path_bytes,
         keep_suffix_array_in_memory,
     )
-    # TODO: check return code
+    if return_code != ReturnCode.FileReadOkay:
+        raise Exception(f"Failed to read index from file: {ReturnCode(return_code).name}")
     return index_ptr
 
 
@@ -301,4 +305,12 @@ def parallel_search_locate(
     return_code = _pfmi._parallel_search_locate(
         index._index, kmer_search_list._kmer_search_list, num_threads
     )
-    # TODO: check return code
+    if return_code != ReturnCode.Success:
+        raise Exception(f"Failed to find the k-mers locations: {ReturnCode(return_code).name}")
+
+def parallel_search_count(
+    index: Index, kmer_search_list: KmerSearchList, num_threads: int = 4
+):
+    _pfmi._parallel_search_count(
+        index._index, kmer_search_list._kmer_search_list, num_threads
+    ) # awFmParallelSearchCount returns void and fills KmerSearchData
