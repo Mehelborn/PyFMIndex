@@ -212,12 +212,12 @@ parallel_search_count.argtypes = [
 ]
 
 
-read_sequence_from_file = lib.awFmReadSequenceFromFile
-read_sequence_from_file.argtypes = [
+_read_sequence_from_file = lib.awFmReadSequenceFromFile
+_read_sequence_from_file.argtypes = [
     POINTER(_Index),
     c_size_t,
     c_size_t,
-    POINTER(c_char_p),
+    c_char_p,
 ]
 
 

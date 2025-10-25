@@ -47,19 +47,25 @@ def test_find_search_range_for_string(config):
 
 def test_create_kmer_search_list(config):
     kmer_search_list: pfmi.KmerSearchList = pfmi.KmerSearchList(5)
-    kmer_search_list.full_list(["CTG", "AAT"], [3, 3])
+    kmer_search_list.fill_out_list(["CTG", "AAT"], [3, 3])
     assert kmer_search_list.count == 2
 
 
 def test_parallel_search_locate(config):
     index = pfmi.Index(config, "./tests/index.awfmi", SEQUENCE)
     kmer_search_list: pfmi.KmerSearchList = pfmi.KmerSearchList(5)
-    kmer_search_list.full_list(["CTG", "AAT"], [3, 3])
+    kmer_search_list.fill_out_list(["CTG", "AAT"], [3, 3])
     pfmi.parallel_search_locate(index, kmer_search_list, 2)
     ksd = kmer_search_list._kmer_search_list.contents.kmer_search_data[0]
     for i in range(ksd.count):
         logger.info(ksd.position_list[i])
         logger.info(ksd.kmer_string)
+
+
+def test_read_sequence_from_file(config):
+    index = pfmi.Index(config, "./tests/index.awfmi", SEQUENCE)
+    segment = index.read_sequence_from_file(10, 10)
+    assert segment == "TGAAGATAAG"
 
 
 @pytest.fixture

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 import logging
 
-from ctypes import POINTER, byref, c_uint8
+import ctypes
 from pyfmindex import _pyfmindex as _pfmi
 
 logger = logging.getLogger(__name__)
@@ -120,17 +120,17 @@ class Index:
         # TODO: check if file_path exists
         file_path_bytes = file_path.encode()
 
-        index_ptr = POINTER(_pfmi._Index)()
+        index_ptr = ctypes.POINTER(_pfmi._Index)()
         if not fasta_path:
             sequence_bytes = sequence.encode()
             sequence_bytes_length = len(sequence_bytes)
-            sequence_array = (c_uint8 * sequence_bytes_length).from_buffer_copy(
+            sequence_array = (ctypes.c_uint8 * sequence_bytes_length).from_buffer_copy(
                 sequence_bytes
             )
 
             return_code: int = _pfmi._create_index(
-                byref(index_ptr),
-                byref(config._config),
+                ctypes.byref(index_ptr),
+                ctypes.byref(config._config),
                 sequence_array,
                 len(sequence_bytes),
                 file_path_bytes,
@@ -140,8 +140,8 @@ class Index:
         else:
             # TODO: check if fasta path exists
             return_code: int = _pfmi._create_index_from_fasta(
-                byref(index_ptr),
-                byref(config._config),
+                ctypes.byref(index_ptr),
+                ctypes.byref(config._config),
                 fasta_path.encode(),
                 file_path_bytes,
             )
@@ -160,11 +160,35 @@ class Index:
             return None
         return SearchRange(search_range.start_ptr, search_range.end_ptr)
 
+    def read_sequence_from_file(self, start: int, segment_length: int):
+        if start < 0:
+            raise ValueError("The start position must be more or equal to 0")
+        if segment_length <= 0:
+            return ""
+        buffer_size = segment_length + 1
+        buffer = ctypes.create_string_buffer(buffer_size)
+        return_code: int = _pfmi._read_sequence_from_file(
+            self._index, start, segment_length, buffer
+        )
+        if return_code == ReturnCode.FileReadFail:
+            raise IOError(
+                f"ERROR: {ReturnCode.FileReadFail.name}. Could not read the index file."
+            )
+        elif return_code == ReturnCode.IllegalPositionError:
+            raise ValueError(
+                f"ERROR: {ReturnCode.IllegalPositionError.name}. The start position is not less than the end position."
+            )
+        elif return_code == ReturnCode.UnsupportedVersionError:
+            raise Exception(
+                f"ERROR: {ReturnCode.UnsupportedVersionError.name}. The index was configured to not store the original sequence."
+            )
+        return buffer.value.decode()
+
     def write_to_file(self, file_path: str):
         # TODO: check if have a sequence
         # TODO: check if file_path exists
         result = _pfmi._write_index_to_file(
-            byref(self._index),
+            ctypes.byref(self._index),
             self.sequence.encode(),
             self.sequence_length,
             file_path.encode(),
@@ -230,9 +254,9 @@ class Index:
 
 def read_index_from_file(file_path: str, keep_suffix_array_in_memory: bool = False):
     # TODO: check if path exists
-    index_ptr = POINTER(_pfmi._Index)()
+    index_ptr = ctypes.POINTER(_pfmi._Index)()
     return_code: int = _pfmi._read_index_from_file(
-        byref(index_ptr),
+        ctypes.byref(index_ptr),
         file_path.encode(),
         keep_suffix_array_in_memory,
     )
@@ -246,7 +270,7 @@ class KmerSearchList:
             raise ValueError("Invalid capacity")
         self._kmer_search_list = _pfmi._create_kmer_search_list(capacity)
 
-    def full_list(self, kmers: list[str], kmers_length: list[int]):
+    def fill_out_list(self, kmers: list[str], kmers_length: list[int]):
         num_kmers = len(kmers)
         kmer_search_data = self._kmer_search_list.contents.kmer_search_data
         for i in range(num_kmers):
