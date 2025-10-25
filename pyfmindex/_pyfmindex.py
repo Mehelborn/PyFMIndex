@@ -17,17 +17,6 @@ so_path = os.path.abspath("lib/AvxWindowFmIndex/build/libawfmindex.so")
 lib = cdll.LoadLibrary(so_path)
 
 
-class ReturnCode(c_int):
-    Success = 1
-    FileReadOkay = 2
-    FileWriteOkay = 3
-    GeneralFailure = -1
-    FileError = -2
-    AllocationFailure = -3
-    SuffixArrayFailure = -4
-    OutOfMemory = -5
-
-
 SimdVec256 = c_uint8 * 32
 
 
@@ -76,7 +65,7 @@ class CompressedSuffixArray(Structure):
     ]
 
 
-class SearchRange(Structure):
+class _SearchRange(Structure):
     _fields_ = [("start_ptr", c_uint64), ("end_ptr", c_uint64)]
 
 
@@ -118,7 +107,7 @@ class _Index(Structure):
         ("bwt_length", c_uint64),
         ("bwt_block_list", BwtBlockList),
         ("prefix_sums", POINTER(c_uint64)),
-        ("kmer_seed_table", POINTER(SearchRange)),
+        ("kmer_seed_table", POINTER(_SearchRange)),
         ("file_handle", POINTER(c_void_p)),
         ("config", _IndexConfiguration),
         ("file_descriptor", c_int),
@@ -129,7 +118,7 @@ class _Index(Structure):
     ]
 
 
-class KmerSearchData(Structure):
+class _KmerSearchData(Structure):
     _fields_ = [
         ("kmer_string", c_char_p),
         ("kmer_length", c_uint64),
@@ -139,11 +128,11 @@ class KmerSearchData(Structure):
     ]
 
 
-class KmerSearchList(Structure):
+class _KmerSearchList(Structure):
     _fields_ = [
         ("capacity", c_size_t),
         ("count", c_size_t),
-        ("kmer_search_data", POINTER(KmerSearchData)),
+        ("kmer_search_data", POINTER(_KmerSearchData)),
     ]
 
 
@@ -188,29 +177,29 @@ _read_index_from_file.argtypes = [
 ]
 
 
-find_search_range_for_string = lib.awFmFindSearchRangeForString
-find_search_range_for_string.argtypes = [
-    POINTER(POINTER(_Index)),
+_find_search_range_for_string = lib.awFmFindSearchRangeForString
+_find_search_range_for_string.argtypes = [
+    POINTER(_Index),
     c_char_p,
     c_size_t,
 ]
-find_search_range_for_string.restype = SearchRange
+_find_search_range_for_string.restype = _SearchRange
 
 
-create_kmer_search_list = lib.awFmCreateKmerSearchList
-create_kmer_search_list.argtypes = [c_size_t]
-create_kmer_search_list.restype = KmerSearchList
+_create_kmer_search_list = lib.awFmCreateKmerSearchList
+_create_kmer_search_list.argtypes = [c_size_t]
+_create_kmer_search_list.restype = POINTER(_KmerSearchList)
 
 
-dealloc_kmer_search_list = lib.awFmDeallocKmerSearchList
-dealloc_kmer_search_list.argtypes = [POINTER(KmerSearchList)]
-dealloc_kmer_search_list.restype = None
+_dealloc_kmer_search_list = lib.awFmDeallocKmerSearchList
+_dealloc_kmer_search_list.argtypes = [POINTER(_KmerSearchList)]
+_dealloc_kmer_search_list.restype = None
 
 
-parallel_search_locate = lib.awFmParallelSearchLocate
-parallel_search_locate.argtypes = [
+_parallel_search_locate = lib.awFmParallelSearchLocate
+_parallel_search_locate.argtypes = [
     POINTER(_Index),
-    POINTER(KmerSearchList),
+    POINTER(_KmerSearchList),
     c_uint32,
 ]
 
@@ -218,7 +207,7 @@ parallel_search_locate.argtypes = [
 parallel_search_count = lib.awFmParallelSearchCount
 parallel_search_count.argtypes = [
     POINTER(_Index),
-    POINTER(KmerSearchList),
+    POINTER(_KmerSearchList),
     c_uint32,
 ]
 
@@ -238,7 +227,7 @@ create_initial_query_range.argtypes = [
     POINTER(c_char_p),
     c_uint64,
 ]
-create_initial_query_range.restype = SearchRange
+create_initial_query_range.restype = _SearchRange
 
 
 create_initial_query_range_from_char = lib.awFmCreateInitialQueryRangeFromChar
@@ -246,7 +235,7 @@ create_initial_query_range_from_char.argtypes = [
     POINTER(_Index),
     c_char_p,
 ]
-create_initial_query_range_from_char.restype = SearchRange
+create_initial_query_range_from_char.restype = _SearchRange
 
 
 nucleotide_iterative_step_backward_search = (
@@ -254,7 +243,7 @@ nucleotide_iterative_step_backward_search = (
 )
 nucleotide_iterative_step_backward_search.argtypes = [
     POINTER(_Index),
-    POINTER(SearchRange),
+    POINTER(_SearchRange),
     c_uint8,
 ]
 nucleotide_iterative_step_backward_search.restype = None
@@ -263,7 +252,7 @@ nucleotide_iterative_step_backward_search.restype = None
 amino_iterative_step_backward_search = lib.awFmAminoIterativeStepBackwardSearch
 amino_iterative_step_backward_search.argtypes = [
     POINTER(_Index),
-    POINTER(SearchRange),
+    POINTER(_SearchRange),
     c_uint8,
 ]
 amino_iterative_step_backward_search.restype = None
@@ -272,7 +261,7 @@ amino_iterative_step_backward_search.restype = None
 find_database_hit_positions = lib.awFmFindDatabaseHitPositions
 find_database_hit_positions.argtypes = [
     POINTER(_Index),
-    POINTER(SearchRange),
+    POINTER(_SearchRange),
     POINTER(c_int),
 ]
 
@@ -324,7 +313,7 @@ get_header_string_from_sequence_number.argtypes = [
 
 
 search_range_length = lib.awFmSearchRangeLength
-search_range_length.argtypes = [POINTER(SearchRange)]
+search_range_length.argtypes = [POINTER(_SearchRange)]
 search_range_length.restype = c_size_t
 
 
