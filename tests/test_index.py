@@ -15,6 +15,11 @@ KMER_LENGTH_IN_SEED_TABLE = 12
 ALPHABET_TYPE = 2
 
 
+def test_index_creation_from_fasta_file(config):
+    index = pfmi.Index(config, "./tests/index.awfmi", fasta_path="./tests/seq1.fasta")
+    assert index is not None
+
+
 def test_read_index_from_file():
     index = pfmi.read_index_from_file("./tests/index.awfmi", False)
     assert index is not None

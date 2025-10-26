@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 import logging
 import os
+from pathlib import Path
 
 import ctypes
 from pyfmindex import _pyfmindex as _pfmi
@@ -114,7 +115,14 @@ class Index:
             if os.path.exists(file_path):
                 file_path_bytes = file_path.encode()
             else:
-                raise FileNotFoundError(file_path)
+                p = Path(file_path)
+                parent_dir = p.absolute().parent
+                if os.path.exists(parent_dir):
+                    with open(p.absolute(), "x") as f:
+                        f.write("")
+                    file_path_bytes = file_path.encode()
+                else:
+                    raise FileNotFoundError(file_path)
 
             index_ptr = ctypes.POINTER(_pfmi._Index)()
 
