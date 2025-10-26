@@ -160,15 +160,6 @@ _dealloc_index.argtypes = [POINTER(_Index)]
 _dealloc_index.restype = None
 
 
-_write_index_to_file = lib.awFmWriteIndexToFile
-_write_index_to_file.argtypes = [
-    POINTER(_Index),
-    POINTER(c_uint8),
-    c_uint64,
-    c_char_p,
-]
-
-
 _read_index_from_file = lib.awFmReadIndexFromFile
 _read_index_from_file.argtypes = [
     POINTER(POINTER(_Index)),
