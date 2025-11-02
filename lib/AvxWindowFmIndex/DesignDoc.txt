@@ -1,0 +1,262 @@
+Project: AvxWindowFmIndex library
+
+TODO: this doc file is currently out of date, and should be updated shortly.
+
+todo: reimplement kmer ending (check git repo)
+
+todo: use prefetch function in AwFmSearch.c
+todo: update or remove occupancyPerformanceTest dir.
+
+push fix for newlines in tuning example.
+
+
+add flag to generate static lib
+
+
+There is another way to do this which is a little simpler, however. If you pass --recurse-submodules to the git clone command, it will automatically initialize and update each submodule in the repository, including nested submodules if any of the submodules in the repository have submodules themselves.
+
+
+
+todo: change awFmGetBlockQueryPositionFromGlobalPosition to awFmGetLocalQueryPositionFromGlobalPosition
+todo: checks on valid options for metadata on creation
+
+
+Nucleotide:
+sentinel 0b000: 0
+A 0b001:        1
+C 0b010:        2
+G 0b011:        3
+T 0b100:        4
+
+Amino:
+sentinel 0b00000 |0     0x00
+A 0b01100: 2/4 |1       0x0C
+C 0b10111: 4/8 |2       0x17
+D 0b00011: 2/6 |3       0x03
+E 0b00110: 2/5 |4       0x06
+F 0b11110: 4/7 |5       0x1E
+G 0b11010: 2/5 |6       0x1A
+H 0b11011: 4/8 |7       0x1B
+I 0b11001: 2/6 |8       0x19
+K 0b10101: 2/6 |9       0x15
+L 0b11100: 2/4 |10       0x1C
+M 0b11101: 4/8 |11      0x1D
+N 0b01000: 4/5 |12      0x08
+P 0b01001: 2/6 |13      0x09
+Q 0b00100: 4/6 |14      0x04
+R 0b10011: 2/6 |15      0x13
+S 0b01010: 2/5 |16      0x0A
+T 0b00101: 2/6 |17      0x05
+V 0b10110: 2/5 |18      0x16
+W 0b00001: 4/8 |19      0x01
+Y 0b00010: 4/7 |20      0x02
+
+
+//this is the only encoding currently supported. I can optimize for bi-dir if needed,
+//but I'm not gonna write this shit if it's never gonna get used.
+// encoding strategy for backward only index
+// using backward only, the vector encoding does not matter, no need to reorder for SA creation.
+Index 0:  'a',0b00011: 2
+Index 1:  'c',0b00001: 4
+Index 2:  'd',0b00101: 2
+Index 3:  'e',0b00110: 2
+Index 4:  'f',0b00010: 4
+Index 5:  'g',0b01001: 2
+Index 6:  'h',0b00100: 4
+Index 7:  'i',0b01010: 2
+Index 8:  'k',0b01100: 2
+Index 9:  'l',0b10011: 2
+Index 10: 'm',0b01000: 4
+Index 11: 'n',0b10111: 4
+Index 12: 'p',0b10101: 2
+Index 13: 'q',0b11011: 4
+Index 14: 'r',0b10110: 2
+Index 15: 's',0b11001: 2
+Index 16: 't',0b11010: 2
+Index 17: 'v',0b11100: 2
+Index 18: 'w' 0b11110: 4
+Index 19: 'y',0b11101: 4
+
+
+
+//encoding strategy for bidirectional, optimized for speeding up the summing of the base occurrences
+//this strategy is not currently supported. fuck this nonsense, I'm not wasting time on a version
+//that's slower and is never gonna get used.
+Index 0:  'l' 0b11110: 4/8
+Index 1:  'a',0b11101: 4/7
+Index 2:  'g',0b11100: 2/6
+Index 3:  'v',0b11011: 4/6
+Index 4:  'e',0b11010: 2/6
+Index 5:  's',0b11001: 2/5
+Index 6:  'i',0b10111: 4/5
+Index 7:  'k',0b10110: 2/6
+Index 8:  'r',0b10101: 2/5
+Index 9:  'd',0b10011: 2/4
+Index 10: 't',0b01100: 2/6
+Index 11: 'p',0b01010: 2/6
+Index 12: 'n',0b01001: 2/5
+Index 13: 'q',0b01000: 4/8
+Index 14: 'f',0b00110: 2/6
+Index 15: 'y',0b00101: 2/5
+Index 16: 'm',0b00100: 4/8
+Index 17: 'h',0b00011: 2/4
+Index 18: 'c',0b00010: 4/8
+Index 19: 'w',0b00001: 4/7
+
+letter sort mapping:
+a->c
+c->w
+d->l
+e->f
+f->r
+g->d
+h->v
+i->h
+k->i
+l->a
+m->t
+n->p
+p->n
+q->q
+r->k
+s->g
+t->m
+v->e
+w->y
+y->s
+letter resort map array
+{'?','c','?','w','l','f','r','d',
+'v','h','?','i','a','t','p','?',
+'n','q','k','g', 'm','?','e','y',
+'?','s','?','?','?','?','?','?',}
+
+letter unsort mapping:
+a->l
+c->a
+d->g
+e->v
+f->e
+g->s
+h->i
+i->k
+k->r
+l->d
+m->t
+n->p
+p->n
+q->q
+r->f
+s->y
+t->m
+v->h
+w->c
+y->w
+
+
+letter unsort map array
+{'?','l','?','a','g','v','e','s',
+'i','k','?','r','d','t','p','?',
+'n','q','f','y','m','?','h','c',
+'?','w','?','?','?','?','?','?',}
+
+
+
+//TODO: make deallocFmIndex deallocate everything in index.
+
+Goal: to provide a heavily optimized FM-index protein search implementation for use in bioinformatics pipelines.
+
+Currently, I am aiming to make this both a software library that can be linked to (as in LibDifSufSort),
+as well as a standalone executable version.
+
+
+
+Public API:
+  building:
+    build FM-index from ascii full-text, given as cmd line argument string
+    build FM-index from ascii full-text, given as stdin pipe      (standalone only, I think.)
+    build FM-index from ascii full-text, given as raw text file (raw text, fasta, )
+    build FM-index from ascii full-text, given as fasta file
+    (maybe) build FM-index from ascii existing fm index file, as hmmer likes it
+
+    save Fm-index as application specific file format (.FMI extension)
+    (maybe) save FM-index as hmmer fm-index file format
+    (maybe) return FM-index as structure from library code.
+
+    reconstructFullText: rebuilds the full text by walking through the bwt from the end '$' character.
+
+
+    exists function: takes arguments of kmer string, and a prebuilt FM-index structure. returns bool of if the kmer was found.
+    findRangeForKmer: takes arguments of Kmer string, and prebuilt FM-index structure. returns range in BWT of occurances.
+    findQueryHitsForKmer: takes arguments of kmer string, prebuilt FM-index. returns array of all positions in original full database text where found.
+
+    backwardStep: takes arguments FM-index structure, bwt range, and prefix character. Returns range for kmer that also includes prefix.    (lib only)
+
+    FullStringSearch: takes query sequence (or file), prebuilt FM-index. returns list of tuples [position in sequence, range of hits in bwt.] (lib only)
+    FullStringQueryHits: takes query sequence (or file), prebuilt fm-index. returns array of tuples [position in sequence, position in database].
+
+    getDbSequenceAroundHit(hitPositionInDbSeq, numCharsBefore, numCharsAfter): seeks into file, grabbing sequence around hit as a char array.
+
+
+--------------------------------------------------------------------------------
+
+project structure:
+
+directory: Index
+	AwFmIndex.h: structs for the FmIndex and lower level structs/unions.
+	AwFmFastBuild.c/.h
+		Builds a FmIndex from full text source, either from string or file.
+	AwFmLoad.c/.h
+		Loads an FmIndex from file.
+	AwFmSave.c/.h
+		Saves the FmIndex structure to file.
+
+directory: Search
+	AwFmOccupancy.c/h: contains all of the occupancy functions and helpers
+	AwFmFastSearch.c/.h: contains backwardsStep function, exists function, and findRange functions.
+
+directory: Error:
+	AwFmError.c/.h: handles errors
+
+
+Api (root directory):
+	AwFmApi.h: include api for the project, contains public functions.
+	AwFmRoot.h: top-level definitions, typedefs, etc.
+
+
+unplaced stuff:
+CharacterTransforms: converts ascii to frequency indexed characters, ascii to vector format, function for ambiguity resolution.
+
+
+
+
+
+
+--------------------------------------------------------------------------------
+cannonical naming convention.
+files: 		pascal case
+structs: 	pascal case
+functions: 	camel case
+
+
+--------------------------------------------------------------------------------
+.awfmi File Format:
+  bytes [7:0]:    8 byte header containing the text "FmIndex" and a null terminator (0x00)
+  bytes [71:8]:   64 byte metadata header, containing at least a 4-byte version info integer.
+                    As long as the version info is below 2^16, the rest of the versioning is defined below.
+                    Versions after 2^16 are allowed to redefine the data below. These versions are undefined, and only specified for future-proofing.
+                  The byte after the version info (byte 12) shall determine the bit size of the positions.
+                    If Byte 12 is 0, the I array (defined below) shall be represented as 32-bit positions.
+                    If Byte 12 is 1, the I array shall be represented as 64-bit positions.
+                    Currently, only 64-bit I arrays are supported (byte 12 == 0 is undefined.)
+
+
+  bytes [79:72]:  8 byte integer representing the number of 224-position blocks in the index
+  bytes [87:80]:  8 byte integer representing the number of positions BWT array.
+  bytes [95:88]:  8 byte integer indicating the position of the null terminator.
+  bytes [-:96]:   The block list of the index. Each block contains a 160 byte base occupancy header
+                    and 160 bytes for the position bit vectors, totaling 320 bytes per block.
+
+  after each block is specified, the file shall contain one integer per position in the Bwt
+  correlating to the I array in the traditional FM-index implementation.
+  The integer bit width shall be determined by the 5th byte in the metadata (byte 12 in the file).
+--------------------------------------------------------------------------------
