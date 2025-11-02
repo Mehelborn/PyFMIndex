@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 import ctypes
-from pyfmindex import _pyfmindex as _pfmi
+from . import _dna_fm_index as _dfi
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class IndexConfiguration:
         keep_suffix_array_in_memory: bool,
         store_original_sequence: bool,
     ) -> None:
-        self._config = _pfmi._IndexConfiguration(
+        self._config = _dfi._IndexConfiguration(
             suffix_array_compression_ratio,
             kmer_length_in_seed_table,
             alphabet_type,
@@ -124,7 +124,7 @@ class Index:
                 else:
                     raise FileNotFoundError(file_path)
 
-            index_ptr = ctypes.POINTER(_pfmi._Index)()
+            index_ptr = ctypes.POINTER(_dfi._Index)()
 
             if sequence:
                 sequence_bytes = sequence.encode()
@@ -133,7 +133,7 @@ class Index:
                     ctypes.c_uint8 * sequence_bytes_length
                 ).from_buffer_copy(sequence_bytes)
 
-                return_code: int = _pfmi._create_index(
+                return_code: int = _dfi._create_index(
                     ctypes.byref(index_ptr),
                     ctypes.byref(config._config),
                     sequence_array,
@@ -146,7 +146,7 @@ class Index:
                 else:
                     raise FileNotFoundError(fasta_path)
 
-                return_code: int = _pfmi._create_index_from_fasta(
+                return_code: int = _dfi._create_index_from_fasta(
                     ctypes.byref(index_ptr),
                     ctypes.byref(config._config),
                     fasta_path_bytes,
@@ -173,7 +173,7 @@ class Index:
                 raise Exception("The fasta file cannot be opened for reading.")
         else:
             if not isinstance(index_ptr, ctypes._Pointer) or not issubclass(
-                index_ptr._type_, _pfmi._Index
+                index_ptr._type_, _dfi._Index
             ):
                 raise TypeError("index_ptr is not a valid pointer type.")
         self._index = index_ptr
@@ -183,7 +183,7 @@ class Index:
         kmer_length = len(kmer_bytes)
         if kmer_length == 0:
             raise ValueError("Invalid length")
-        search_range: _pfmi._SearchRange = _pfmi._find_search_range_for_string(
+        search_range: _dfi._SearchRange = _dfi._find_search_range_for_string(
             self._index, kmer_bytes, kmer_length
         )
         if search_range.start_ptr >= search_range.end_ptr:
@@ -198,7 +198,7 @@ class Index:
 
         buffer_size = segment_length + 1
         buffer = ctypes.create_string_buffer(buffer_size)
-        return_code: int = _pfmi._read_sequence_from_file(
+        return_code: int = _dfi._read_sequence_from_file(
             self._index, start, segment_length, buffer
         )
 
@@ -266,18 +266,25 @@ class Index:
 
     def __del__(self):
         if self._index is not None:
-            _pfmi._dealloc_index(self._index)
+            _dfi._dealloc_index(self._index)
 
 
 def read_index_from_file(file_path: str, keep_suffix_array_in_memory: bool = False):
     if os.path.exists(file_path):
         file_path_bytes = file_path.encode()
     else:
-        raise FileNotFoundError(file_path)
+        p = Path(file_path)
+        parent_dir = p.absolute().parent
+        if os.path.exists(parent_dir):
+            with open(p.absolute(), "x") as f:
+                f.write("")
+            file_path_bytes = file_path.encode()
+        else:
+            raise FileNotFoundError(file_path)
 
-    index_ptr = ctypes.POINTER(_pfmi._Index)()
+    index_ptr = ctypes.POINTER(_dfi._Index)()
 
-    return_code: int = _pfmi._read_index_from_file(
+    return_code: int = _dfi._read_index_from_file(
         ctypes.byref(index_ptr),
         file_path_bytes,
         keep_suffix_array_in_memory,
@@ -298,7 +305,7 @@ class KmerSearchList:
     def __init__(self, capacity: int) -> None:
         if capacity <= 0:
             raise ValueError("Invalid capacity")
-        if (_ksl := _pfmi._create_kmer_search_list(capacity)) is None:
+        if (_ksl := _dfi._create_kmer_search_list(capacity)) is None:
             raise Exception("Something went wrong while creating the search list")
         self._kmer_search_list = _ksl
 
@@ -316,7 +323,7 @@ class KmerSearchList:
 
     def parallel_search_locate(self, index: Index, num_threads: int = 4):
         self.check_count()
-        return_code = _pfmi._parallel_search_locate(
+        return_code = _dfi._parallel_search_locate(
             index._index, self._kmer_search_list, num_threads
         )
         if return_code == ReturnCode.FileReadFail:
@@ -324,7 +331,7 @@ class KmerSearchList:
 
     def parallel_search_count(self, index: Index, num_threads: int = 4):
         self.check_count()
-        _pfmi._parallel_search_count(index._index, self._kmer_search_list, num_threads)
+        _dfi._parallel_search_count(index._index, self._kmer_search_list, num_threads)
 
     def check_count(self):
         if self.count <= 0:
@@ -346,4 +353,4 @@ class KmerSearchList:
 
     def __del__(self):
         if self._kmer_search_list:
-            _pfmi._dealloc_kmer_search_list(self._kmer_search_list)
+            _dfi._dealloc_kmer_search_list(self._kmer_search_list)

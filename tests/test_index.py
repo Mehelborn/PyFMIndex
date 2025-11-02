@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-import pyfmindex as pfmi
+import DNAFMIndex as dfi
 
 logger = logging.getLogger(__name__)
 
@@ -16,12 +16,12 @@ ALPHABET_TYPE = 2
 
 
 def test_index_creation_from_fasta_file(config):
-    index = pfmi.Index(config, "./tests/index.awfmi", fasta_path="./tests/seq1.fasta")
+    index = dfi.Index(config, "./tests/index.awfmi", fasta_path="./tests/seq1.fasta")
     assert index is not None
 
 
 def test_read_index_from_file():
-    index = pfmi.read_index_from_file("./tests/index.awfmi", False)
+    index = dfi.read_index_from_file("./tests/index.awfmi", False)
     assert index is not None
 
 
@@ -31,13 +31,13 @@ def test_find_search_range_for_string(index):
 
 
 def test_create_kmer_search_list():
-    kmer_search_list = pfmi.KmerSearchList(5)
+    kmer_search_list = dfi.KmerSearchList(5)
     kmer_search_list.fill(KMERS)
     assert kmer_search_list.count == 2
 
 
 def test_parallel_search_locate(index):
-    kmer_search_list = pfmi.KmerSearchList(5)
+    kmer_search_list = dfi.KmerSearchList(5)
     kmer_search_list.fill(KMERS)
     kmer_search_list.parallel_search_locate(index)
     for i in range(kmer_search_list.count):
@@ -45,7 +45,7 @@ def test_parallel_search_locate(index):
 
 
 def test_parallel_search_count(index):
-    kmer_search_list = pfmi.KmerSearchList(5)
+    kmer_search_list = dfi.KmerSearchList(5)
     kmer_search_list.fill(KMERS)
     kmer_search_list.parallel_search_count(index)
     kmers_count = (4, 1)
@@ -60,7 +60,7 @@ def test_read_sequence_from_file(index):
 
 @pytest.fixture(scope="session")
 def config():
-    return pfmi.IndexConfiguration(
+    return dfi.IndexConfiguration(
         SUFFIX_ARRAY_COMPRESSION_RATIO,
         KMER_LENGTH_IN_SEED_TABLE,
         ALPHABET_TYPE,
@@ -71,4 +71,4 @@ def config():
 
 @pytest.fixture(scope="session")
 def index(config):
-    return pfmi.Index(config, "./tests/index.awfmi", SEQUENCE)
+    return dfi.Index(config, "./tests/index.awfmi", SEQUENCE)

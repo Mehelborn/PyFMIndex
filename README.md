@@ -1,8 +1,5 @@
-**Linux**
+# DNAFMIndex
 
-To use the wrapper do:
-
-```sh
-chmod +x ./install.bash
-./install.bash
-```
+This project wraps **[TravisWheelerLab/AvxWindowFmIndex](https://github.com/TravisWheelerLab/AvxWindowFmIndex)**,
+which is licensed under the BSD 3-Clause License.
+Copyright (c) 2021, Tim Anderson.

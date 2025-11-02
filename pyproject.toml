@@ -1,13 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
-name = "pyfmindex"
-version = "0.0.1"
+name = "DNAFMIndex"
+authors = [
+    {name = "mehelborn", email = "mr.4uldum@gmail.com"},
+    {name = "tocl19", email = "ael.mak1504@gmail.com"}
+]
+version = "0.1.0"
 description = "Python wrapper for AvxWindowFmIndex library"
 readme = "README.md"
-requires-python = ">=3.12"
+license = {file = "LICENSE"}
+requires-python = ">=3.8"
 dependencies = []
 
 [dependency-groups]
 dev = [
-    "debugpy>=1.8.17",
-    "pytest>=8.4.2",
+    "debugpy",
+    "pytest",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Mehelborn/DNAFMIndex"
+Repository = "https://github.com/Mehelborn/DNAFMIndex"
+
+[tool.hatch.build]
+artifacts = [
+    "lib/AvxWindowFmIndex/build/libawfmindex.so",
+    "lib/AvxWindowFmIndex/lib/FastaVector/build/libfastavector.so",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/DNAFMIndex"]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"lib/AvxWindowFmIndex/build" = "DNAFMIndex/lib/AvxWindowFmIndex"
+
+[tool.hatch.build.hooks.custom]
+path = "build.py"
