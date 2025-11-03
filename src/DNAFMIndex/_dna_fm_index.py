@@ -1,323 +1,360 @@
-# ruff: noqa F403, F405
-
+from dataclasses import dataclass
+from enum import IntEnum
+import logging
 import os
-from ctypes import *
-
-AMINO_VECTORS_PER_WINDOW = 5
-NUCLEOTIDE_VECTORS_PER_WINDOW = 3
-NUCLEOTIDE_CARDINALITY = 4
-AMINO_CARDINALITY = 20
-
-ALPHABET_TYPE_AMINO = 1
-ALPHABET_TYPE_DNA = 2
-ALPHABET_TYPE_RNA = 3
-
-
-so_path = os.path.abspath("lib/AvxWindowFmIndex/build/libawfmindex.so")
-lib = cdll.LoadLibrary(so_path)
-
-
-SimdVec256 = c_uint8 * 32
-
-
-class AminoBlock(Structure):
-    _fields_ = [
-        ("letter_bit_vectors", SimdVec256 * AMINO_VECTORS_PER_WINDOW),
-        (
-            "base_occurrences",
-            c_uint64 * (AMINO_CARDINALITY + 4),
-        ),  # +4 is for sentinel count and 32B padding
-    ]
-
-
-class NucleotideBlock(Structure):
-    _fields_ = [
-        ("letter_bit_vectors", SimdVec256 * NUCLEOTIDE_VECTORS_PER_WINDOW),
-        (
-            "base_occurrences",
-            c_uint64 * (NUCLEOTIDE_CARDINALITY + 4),
-        ),  # +4 is for sentinel count and 32B padding
-    ]
-
-
-class BwtBlockList(Union):
-    _fields_ = [
-        ("as_nucleotide", POINTER(NucleotideBlock)),
-        ("as_amino", POINTER(AminoBlock)),
-    ]
-
-
-class _IndexConfiguration(Structure):
-    _fields_ = [
-        ("suffix_array_compression_ratio", c_uint8),
-        ("kmer_length_in_seed_table", c_uint8),
-        ("alphabet_type", c_int),
-        ("keep_suffix_array_in_memory", c_bool),
-        ("store_original_sequence", c_bool),
-    ]
-
-
-class CompressedSuffixArray(Structure):
-    _fields_ = [
-        ("value_bit_width", c_uint8),
-        ("values", POINTER(c_uint8)),
-        ("compressed_byte_length", c_uint64),
-    ]
-
-
-class _SearchRange(Structure):
-    _fields_ = [("start_ptr", c_uint64), ("end_ptr", c_uint64)]
-
-
-class FastaVectorMetadata(Structure):
-    _fields_ = [
-        ("headerEndPosition", c_size_t),
-        ("sequenceEndPosition", c_size_t),
-    ]
-
-
-class FastaVectorMetadataVector(Structure):
-    _fields_ = [
-        ("data", POINTER(FastaVectorMetadata)),
-        ("capacity", c_size_t),
-        ("count", c_size_t),
-    ]
-
-
-class FastaVectorString(Structure):
-    _fields_ = [
-        ("char_data", c_char_p),
-        ("capacity", c_size_t),
-        ("count", c_size_t),
-    ]
-
-
-class FastaVector(Structure):
-    _fields_ = [
-        ("sequence", FastaVectorString),
-        ("header", FastaVectorString),
-        ("metadata", FastaVectorMetadataVector),
-    ]
-
-
-class _Index(Structure):
-    _fields_ = [
-        ("version_number", c_uint32),
-        ("feature_flags", c_uint32),  # for non user-customizable options
-        ("bwt_length", c_uint64),
-        ("bwt_block_list", BwtBlockList),
-        ("prefix_sums", POINTER(c_uint64)),
-        ("kmer_seed_table", POINTER(_SearchRange)),
-        ("file_handle", POINTER(c_void_p)),
-        ("config", _IndexConfiguration),
-        ("file_descriptor", c_int),
-        ("suffix_array_file_offset", c_size_t),
-        ("sequence_file_offset", c_size_t),
-        ("fasta_vector", POINTER(FastaVector)),
-        ("suffix_array", CompressedSuffixArray),
-    ]
-
-
-class _KmerSearchData(Structure):
-    _fields_ = [
-        ("kmer_string", c_char_p),
-        ("kmer_length", c_uint64),
-        ("position_list", POINTER(c_uint64)),
-        ("count", c_uint32),
-        ("capacity", c_uint32),
-    ]
-
-
-class _KmerSearchList(Structure):
-    _fields_ = [
-        ("capacity", c_size_t),
-        ("count", c_size_t),
-        ("kmer_search_data", POINTER(_KmerSearchData)),
-    ]
-
-
-_create_index = lib.awFmCreateIndex
-_create_index.argtypes = [
-    POINTER(POINTER(_Index)),
-    POINTER(_IndexConfiguration),
-    POINTER(c_uint8),
-    c_size_t,
-    c_char_p,
-]
-
-
-_create_index_from_fasta = lib.awFmCreateIndexFromFasta
-_create_index_from_fasta.argtypes = [
-    POINTER(POINTER(_Index)),
-    POINTER(_IndexConfiguration),
-    c_char_p,
-    c_char_p,
-]
-
-
-_dealloc_index = lib.awFmDeallocIndex
-_dealloc_index.argtypes = [POINTER(_Index)]
-_dealloc_index.restype = None
-
-
-_read_index_from_file = lib.awFmReadIndexFromFile
-_read_index_from_file.argtypes = [
-    POINTER(POINTER(_Index)),
-    c_char_p,
-    c_bool,
-]
-
-
-_find_search_range_for_string = lib.awFmFindSearchRangeForString
-_find_search_range_for_string.argtypes = [
-    POINTER(_Index),
-    c_char_p,
-    c_size_t,
-]
-_find_search_range_for_string.restype = _SearchRange
-
-
-_create_kmer_search_list = lib.awFmCreateKmerSearchList
-_create_kmer_search_list.argtypes = [c_size_t]
-_create_kmer_search_list.restype = POINTER(_KmerSearchList)
-
-
-_dealloc_kmer_search_list = lib.awFmDeallocKmerSearchList
-_dealloc_kmer_search_list.argtypes = [POINTER(_KmerSearchList)]
-_dealloc_kmer_search_list.restype = None
-
-
-_parallel_search_locate = lib.awFmParallelSearchLocate
-_parallel_search_locate.argtypes = [
-    POINTER(_Index),
-    POINTER(_KmerSearchList),
-    c_uint32,
-]
-
-
-_parallel_search_count = lib.awFmParallelSearchCount
-_parallel_search_count.argtypes = [
-    POINTER(_Index),
-    POINTER(_KmerSearchList),
-    c_uint32,
-]
-_parallel_search_count.restype = None
-
-
-_read_sequence_from_file = lib.awFmReadSequenceFromFile
-_read_sequence_from_file.argtypes = [
-    POINTER(_Index),
-    c_size_t,
-    c_size_t,
-    c_char_p,
-]
-
-
-create_initial_query_range = lib.awFmCreateInitialQueryRange
-create_initial_query_range.argtypes = [
-    POINTER(_Index),
-    POINTER(c_char_p),
-    c_uint64,
-]
-create_initial_query_range.restype = _SearchRange
-
-
-create_initial_query_range_from_char = lib.awFmCreateInitialQueryRangeFromChar
-create_initial_query_range_from_char.argtypes = [
-    POINTER(_Index),
-    c_char_p,
-]
-create_initial_query_range_from_char.restype = _SearchRange
-
-
-nucleotide_iterative_step_backward_search = (
-    lib.awFmNucleotideIterativeStepBackwardSearch
-)
-nucleotide_iterative_step_backward_search.argtypes = [
-    POINTER(_Index),
-    POINTER(_SearchRange),
-    c_uint8,
-]
-nucleotide_iterative_step_backward_search.restype = None
-
-
-amino_iterative_step_backward_search = lib.awFmAminoIterativeStepBackwardSearch
-amino_iterative_step_backward_search.argtypes = [
-    POINTER(_Index),
-    POINTER(_SearchRange),
-    c_uint8,
-]
-amino_iterative_step_backward_search.restype = None
-
-
-find_database_hit_positions = lib.awFmFindDatabaseHitPositions
-find_database_hit_positions.argtypes = [
-    POINTER(_Index),
-    POINTER(_SearchRange),
-    POINTER(c_int),
-]
-
-
-find_database_hit_position_single = lib.awFmFindDatabaseHitPositionSingle
-find_database_hit_position_single.argtypes = [
-    POINTER(_Index),
-    c_uint64,
-    POINTER(c_int),
-]
-find_database_hit_position_single.restype = POINTER(c_uint64)
-
-
-get_local_sequence_position_from_index_position = (
-    lib.awFmGetLocalSequencePositionFromIndexPosition
-)
-get_local_sequence_position_from_index_position.argtypes = [
-    POINTER(_Index),
-    c_size_t,
-    POINTER(c_size_t),
-    POINTER(c_size_t),
-]
-
-
-nucleotide_backtrace_return_previous_letter_index = (
-    lib.awFmNucleotideBacktraceReturnPreviousLetterIndex
-)
-nucleotide_backtrace_return_previous_letter_index.argtypes = [
-    POINTER(_Index),
-    POINTER(c_uint64),
-]
-
-amino_backtrace_return_previous_letter_index = (
-    lib.awFmAminoBacktraceReturnPreviousLetterIndex
-)
-amino_backtrace_return_previous_letter_index.argtypes = [
-    POINTER(_Index),
-    POINTER(c_uint64),
-]
-
-
-get_header_string_from_sequence_number = lib.awFmGetHeaderStringFromSequenceNumber
-get_header_string_from_sequence_number.argtypes = [
-    POINTER(_Index),
-    c_size_t,
-    POINTER(POINTER(c_char_p)),
-    POINTER(c_size_t),
-]
-
-
-search_range_length = lib.awFmSearchRangeLength
-search_range_length.argtypes = [POINTER(_SearchRange)]
-search_range_length.restype = c_size_t
-
-
-return_code_is_failure = lib.awFmReturnCodeIsFailure
-return_code_is_failure.argtypes = [c_int]
-return_code_is_failure.restype = c_bool
-
-
-return_code_is_success = lib.awFmReturnCodeIsSuccess
-return_code_is_success.argtypes = [c_int]
-return_code_is_success.restype = c_bool
-
-
-get_num_sequences = lib.awFmGetNumSequences
-get_num_sequences.argtypes = [POINTER(_Index)]
+from pathlib import Path
+
+import ctypes
+from . import _dna_fm_index_ctypes as _dfi
+
+logger = logging.getLogger(__name__)
+
+__all__ = [ "IndexConfiguration", "SearchRange", "Index", "read_index_from_file",
+    "KmerSearchList",
+]  # fmt: skip
+
+
+class ReturnCode(IntEnum):
+    Success = 1
+    FileReadOkay = 2
+    FileWriteOkay = 3
+    GeneralFailure = -1
+    UnsupportedVersionError = -2
+    AllocationFailure = -3
+    NullPtrError = -4
+    SuffixArrayCreationFailure = -5
+    IllegalPositionError = -6
+    NoFileSrcGiven = -7
+    NoDatabaseSequenceGiven = -8
+    FileFormatError = -9
+    FileOpenFail = -10
+    FileReadFail = -11
+    FileWriteFail = -12
+    ErrorDbSequenceNull = -13
+    ErrorSuffixArrayNull = -14
+    FileAlreadyExists = -15
+
+
+class IndexConfiguration:
+    def __init__(
+        self,
+        suffix_array_compression_ratio: int,
+        kmer_length_in_seed_table: int,
+        alphabet_type: int,
+        keep_suffix_array_in_memory: bool,
+        store_original_sequence: bool,
+    ) -> None:
+        self._config = _dfi._IndexConfiguration(
+            suffix_array_compression_ratio,
+            kmer_length_in_seed_table,
+            alphabet_type,
+            keep_suffix_array_in_memory,
+            store_original_sequence,
+        )
+
+    @property
+    def suffix_array_compression_ratio(self) -> int:
+        return self._config.suffix_array_compression_ratio
+
+    @suffix_array_compression_ratio.setter
+    def suffix_array_compression_ratio(self, value: int) -> None:
+        self._config.suffix_array_compression_ratio = value
+
+    @property
+    def kmer_length_in_seed_table(self) -> int:
+        return self._config.kmer_length_in_seed_table
+
+    @kmer_length_in_seed_table.setter
+    def kmer_length_in_seed_table(self, value: int) -> None:
+        self._config.kmer_length_in_seed_table = value
+
+    @property
+    def alphabet_type(self) -> int:
+        return self._config.alphabet_type
+
+    @alphabet_type.setter
+    def alphabet_type(self, value: int) -> None:
+        self._config.alphabet_type = value
+
+    @property
+    def keep_suffix_array_in_memory(self) -> bool:
+        return self._config.keep_suffix_array_in_memory
+
+    @keep_suffix_array_in_memory.setter
+    def keep_suffix_array_in_memory(self, value: bool) -> None:
+        self._config.keep_suffix_array_in_memory = value
+
+    @property
+    def store_original_sequence(self) -> bool:
+        return self._config.store_original_sequence
+
+    @store_original_sequence.setter
+    def store_original_sequence(self, value: bool) -> None:
+        self._config.store_original_sequence = value
+
+
+@dataclass
+class SearchRange:
+    start_ptr: int
+    end_ptr: int
+
+
+class Index:
+    _index = None
+
+    def __init__(
+        self,
+        config: IndexConfiguration | None = None,
+        file_path: str | None = None,
+        sequence: str | None = None,
+        fasta_path: str | None = None,
+        index_ptr: ctypes._Pointer | None = None,
+    ) -> None:
+        if not index_ptr:
+            if not all(( config.alphabet_type, config.keep_suffix_array_in_memory,
+                    config.kmer_length_in_seed_table, config.store_original_sequence,
+                    config.suffix_array_compression_ratio)):  # fmt: skip
+                raise ValueError("Index configuration is not fully initialized.")
+
+            if os.path.exists(file_path):
+                file_path_bytes = file_path.encode()
+            else:
+                p = Path(file_path)
+                parent_dir = p.absolute().parent
+                if os.path.exists(parent_dir):
+                    with open(p.absolute(), "x"):
+                        pass
+                    file_path_bytes = file_path.encode()
+                else:
+                    raise FileNotFoundError(file_path)
+
+            index_ptr = ctypes.POINTER(_dfi._Index)()
+
+            if sequence:
+                sequence_bytes = sequence.encode()
+                sequence_bytes_length = len(sequence_bytes)
+                sequence_array = (
+                    ctypes.c_uint8 * sequence_bytes_length
+                ).from_buffer_copy(sequence_bytes)
+
+                return_code: int = _dfi._create_index(
+                    ctypes.byref(index_ptr),
+                    ctypes.byref(config._config),
+                    sequence_array,
+                    sequence_bytes_length,
+                    file_path_bytes,
+                )
+            elif fasta_path:
+                if os.path.exists(fasta_path):
+                    fasta_path_bytes = fasta_path.encode()
+                else:
+                    raise FileNotFoundError(fasta_path)
+
+                return_code: int = _dfi._create_index_from_fasta(
+                    ctypes.byref(index_ptr),
+                    ctypes.byref(config._config),
+                    fasta_path_bytes,
+                    file_path_bytes,
+                )
+            else:
+                raise ValueError("No data provided for index building.")
+
+            if return_code == ReturnCode.AllocationFailure:
+                raise Exception(
+                    "Memory could not be allocated during the creation process."
+                )
+            elif return_code == ReturnCode.FileAlreadyExists:
+                raise Exception(
+                    "File exists at the given file_path, but allowOverwite was false."
+                )
+            elif return_code == ReturnCode.SuffixArrayCreationFailure:
+                raise Exception(
+                    "An error was caused by divsufsort64 in suffix array creation."
+                )
+            elif return_code == ReturnCode.FileWriteFail:
+                raise Exception("File write failed.")
+            elif return_code == ReturnCode.FileOpenFail:
+                raise Exception("The fasta file cannot be opened for reading.")
+        else:
+            if not isinstance(index_ptr, ctypes._Pointer) or not issubclass(
+                index_ptr._type_, _dfi._Index
+            ):
+                raise TypeError("index_ptr is not a valid pointer type.")
+        self._index = index_ptr
+
+    def find_search_range_for_string(self, kmer: str) -> SearchRange | None:
+        kmer_bytes = kmer.encode()
+        kmer_length = len(kmer_bytes)
+        if kmer_length == 0:
+            raise ValueError("Invalid length")
+        search_range: _dfi._SearchRange = _dfi._find_search_range_for_string(
+            self._index, kmer_bytes, kmer_length
+        )
+        if search_range.start_ptr >= search_range.end_ptr:
+            return None
+        return SearchRange(search_range.start_ptr, search_range.end_ptr)
+
+    def read_sequence_from_file(self, start: int, segment_length: int) -> str:
+        if start < 0:
+            raise ValueError("The start position must be more or equal to 0")
+        if segment_length <= 0:
+            return ""
+
+        buffer_size = segment_length + 1
+        buffer = ctypes.create_string_buffer(buffer_size)
+        return_code: int = _dfi._read_sequence_from_file(
+            self._index, start, segment_length, buffer
+        )
+
+        if return_code == ReturnCode.FileReadFail:
+            raise IOError("Could not read the index file.")
+        elif return_code == ReturnCode.IllegalPositionError:
+            raise ValueError("The start position is not less than the end position.")
+        elif return_code == ReturnCode.UnsupportedVersionError:
+            raise Exception(
+                "The index was configured to not store the original sequence."
+            )
+        return buffer.value.decode()
+
+    @property
+    def version_number(self):
+        return self._index.contents.version_number
+
+    @property
+    def feature_flags(self):
+        return self._index.contents.feature_flags
+
+    @property
+    def bwt_length(self):
+        return self._index.contents.bwt_length
+
+    @property
+    def bwt_block_list(self):
+        return self._index.contents.bwt_block_list
+
+    @property
+    def prefix_sums(self):
+        return self._index.contents.prefix_sums
+
+    @property
+    def kmer_seed_table(self):
+        return self._index.contents.kmer_seed_table
+
+    @property
+    def file_handle(self):
+        return self._index.contents.file_handle
+
+    @property
+    def config(self):
+        return self._index.contents.config
+
+    @property
+    def file_descriptor(self):
+        return self._index.contents.file_descriptor
+
+    @property
+    def suffix_array_file_offset(self):
+        return self._index.contents.suffix_array_file_offset
+
+    @property
+    def sequence_file_offset(self):
+        return self._index.contents.sequence_file_offset
+
+    @property
+    def fasta_vector(self):
+        return self._index.contents.fasta_vector
+
+    @property
+    def suffix_array(self):
+        return self._index.contents.suffix_array
+
+    def __del__(self):
+        if self._index is not None:
+            _dfi._dealloc_index(self._index)
+
+
+def read_index_from_file(file_path: str, keep_suffix_array_in_memory: bool = False):
+    if os.path.exists(file_path):
+        file_path_bytes = file_path.encode()
+    else:
+        p = Path(file_path)
+        parent_dir = p.absolute().parent
+        if os.path.exists(parent_dir):
+            with open(p.absolute(), "x") as f:
+                f.write("")
+            file_path_bytes = file_path.encode()
+        else:
+            raise FileNotFoundError(file_path)
+
+    index_ptr = ctypes.POINTER(_dfi._Index)()
+
+    return_code: int = _dfi._read_index_from_file(
+        ctypes.byref(index_ptr),
+        file_path_bytes,
+        keep_suffix_array_in_memory,
+    )
+
+    if return_code == ReturnCode.FileReadOkay:
+        return Index(index_ptr=index_ptr)
+    elif return_code == ReturnCode.FileAlreadyExists:
+        raise FileNotFoundError(
+            f"No file could be opened at the given file_path: {file_path}"
+        )
+    elif return_code == ReturnCode.FileFormatError:
+        raise Exception("The file at this location is not the correct format.")
+    raise Exception(f"ERROR: {ReturnCode(return_code)}")
+
+
+class KmerSearchList:
+    def __init__(self, capacity: int) -> None:
+        if capacity <= 0:
+            raise ValueError("Invalid capacity")
+        if (_ksl := _dfi._create_kmer_search_list(capacity)) is None:
+            raise Exception("Something went wrong while creating the search list")
+        self._kmer_search_list = _ksl
+
+    def fill(self, kmers: list[str]):
+        num_kmers = len(kmers)
+        if num_kmers >= self.capacity:
+            raise ValueError(
+                "Provided amount of kmers is more than KmerSearchList capacity."
+            )
+        for i in range(num_kmers):
+            kmer = kmers[i].encode()
+            self.kmer_search_data[i].kmer_string = kmer
+            self.kmer_search_data[i].kmer_length = len(kmer)
+        self._kmer_search_list.contents.count = num_kmers
+
+    def parallel_search_locate(self, index: Index, num_threads: int = 4):
+        self.check_count()
+        return_code = _dfi._parallel_search_locate(
+            index._index, self._kmer_search_list, num_threads
+        )
+        if return_code == ReturnCode.FileReadFail:
+            raise Exception("The file could not be read sucessfully.")
+
+    def parallel_search_count(self, index: Index, num_threads: int = 4):
+        self.check_count()
+        _dfi._parallel_search_count(index._index, self._kmer_search_list, num_threads)
+
+    def check_count(self):
+        if self.count <= 0:
+            raise ValueError(
+                "Search list is empty. You must fill out the search list with kmers."
+            )
+
+    @property
+    def capacity(self) -> int:
+        return self._kmer_search_list.contents.capacity
+
+    @property
+    def count(self) -> int:
+        return self._kmer_search_list.contents.count
+
+    @property
+    def kmer_search_data(self) -> ctypes._Pointer:
+        return self._kmer_search_list.contents.kmer_search_data
+
+    def __del__(self):
+        if self._kmer_search_list:
+            _dfi._dealloc_kmer_search_list(self._kmer_search_list)

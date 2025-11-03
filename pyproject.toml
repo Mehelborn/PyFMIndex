@@ -25,17 +25,5 @@ dev = [
 Homepage = "https://github.com/Mehelborn/DNAFMIndex"
 Repository = "https://github.com/Mehelborn/DNAFMIndex"
 
-[tool.hatch.build]
-artifacts = [
-    "lib/AvxWindowFmIndex/build/libawfmindex.so",
-    "lib/AvxWindowFmIndex/lib/FastaVector/build/libfastavector.so",
-]
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/DNAFMIndex"]
-
-[tool.hatch.build.targets.wheel.shared-data]
-"lib/AvxWindowFmIndex/build" = "DNAFMIndex/lib/AvxWindowFmIndex"
-
-[tool.hatch.build.hooks.custom]
-path = "build.py"
