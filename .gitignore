@@ -138,6 +138,7 @@ wheels/
 
 # Virtual environments
 .venv
+.env
 
 *.awfmi
 *.fasta
