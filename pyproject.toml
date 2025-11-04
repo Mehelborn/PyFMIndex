@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "DNAFMIndex"
@@ -25,5 +25,5 @@ dev = [
 Homepage = "https://github.com/Mehelborn/DNAFMIndex"
 Repository = "https://github.com/Mehelborn/DNAFMIndex"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/DNAFMIndex"]
+[tool.setuptools.package-data]
+DNAFMIndex = ["lib/*"]
